@@ -8,7 +8,13 @@
     >
       <v-col v-for="(cell, y) in row" :key="cell.id">
         <!-- {{ cell }} -->
-        <slot name="cell" :value="cell.value" :x="x" :y="y"></slot>
+        <slot
+          name="cell"
+          :value="cell.value"
+          :shaded="cell.shaded"
+          :x="x"
+          :y="y"
+        ></slot>
       </v-col>
     </v-row>
   </div>
@@ -31,9 +37,9 @@ export default {
       for (let row = 0; row < 9; row++) {
         const store = []
         for (let col = 0; col < 9; col++) {
-          console.log(id, this.grid[row][col])
+          // console.log(id, this.grid[row][col])
           id++
-          store.push({ id, value: this.grid[row][col] })
+          store.push({ id, value: this.grid[row][col], shaded: false })
         }
         cells.push(store)
       }

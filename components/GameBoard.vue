@@ -1,8 +1,12 @@
 <template>
   <div>
-    <grid-display ref="grid" :grid="displayGrid">
+    <grid-display ref="grid" :key="gridKey" :grid="activeGrid" @keypress="log">
       <template #cell="{ value, x, y }">
-        <grid-cell :value="value" @click="log(x, y, value)" />
+        <grid-cell
+          :value="value"
+          :shaded="shadedCell(x, y)"
+          @click="selectCell(x, y)"
+        />
       </template>
     </grid-display>
   </div>
@@ -22,18 +26,144 @@ export default {
       subGrids: {},
       showWarnings: false,
       solutions: 0,
+      selectedCell: null,
+      shadedCells: [],
+      emptyCells: 0,
+      gridKey: 0,
     }
+  },
+  computed: {
+    activeGrid() {
+      if (this.displayGrid.length === 0) return []
+      let x = -1
+      return this.displayGrid.map((row) => {
+        x++
+        let y = -1
+        return row.map((cell) => {
+          y++
+          // console.log(x, y)
+
+          if (cell === 0) {
+            return this.playerGrid[x][y]
+          } else {
+            return cell
+          }
+        })
+      })
+    },
+  },
+  watch: {
+    selectedCell(value) {
+      console.log(value)
+    },
   },
   created() {
     this.calcSubGrids()
     this.fillGrid()
-    this.displayGrid = this.completeGrid.slice()
+    this.displayGrid = this.cloneObject(this.completeGrid)
     this.removeCells(1)
   },
-
+  mounted() {
+    window.addEventListener('keydown', (e) => {
+      // registers only key downs for 1 - 9 on either numberpad or keyboard
+      // console.log(e)
+      // eslint-disable-next-line eqeqeq
+      if ([...Array(9).keys()].findIndex((k) => k + 1 == e.key) !== -1) {
+        if (this.selectedCell) {
+          console.log('adding number', e.key)
+          this.addNumber(e.key)
+        }
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        this.eraseCell()
+      }
+    })
+    this.emptyCells = this.displayGrid.reduce((acc, row) => {
+      return acc + row.filter((r) => r === 0).length
+    }, 0)
+  },
   methods: {
     log(x, y, value) {
       console.log(x, y, value)
+    },
+    checkWin() {
+      return this.completeGrid.every((row, x) =>
+        row.every((cell, y) => {
+          console.log(x, y, cell)
+          return (
+            this.displayGrid[x][y] === cell || this.playerGrid[x][y] === cell
+          )
+        })
+      )
+    },
+    selectCell(x, y) {
+      this.selectedCell = { x, y }
+      // this.displayGrid[this.selectedCell.x][this.selectedCell.y].shaded = true
+      this.shadeCells()
+    },
+    shadeCells() {
+      this.shadedCells = []
+      if (!this.selectedCell) return
+      const x = this.selectedCell.x
+      const y = this.selectedCell.y
+      this.shadedCells.push(this.selectedCell)
+      for (let offY = 0; offY < this.completeGrid.length; offY++) {
+        this.shadedCells.push([x, offY])
+      }
+      this.getGridColumn(this.completeGrid, y).forEach((pos) =>
+        this.shadedCells.push(pos)
+      )
+      this.getSubGrid(x, y).forEach((pos) => {
+        this.shadedCells.push(pos)
+      })
+
+      let cellValue = this.displayGrid[x][y]
+      if (cellValue === 0) {
+        cellValue = this.playerGrid[x][y]
+      }
+
+      for (let row = 0; row < this.completeGrid.length; row++) {
+        for (let col = 0; col < this.completeGrid[row].length; col++) {
+          if (row !== x && col !== y) {
+            if (
+              (this.displayGrid[row][col] === cellValue ||
+                this.playerGrid[row][col] === cellValue) &&
+              cellValue !== 0
+            ) {
+              this.shadedCells.push([row, col])
+            }
+          }
+        }
+      }
+    },
+    shadedCell(x, y) {
+      return (
+        this.shadedCells.findIndex((pos) => pos[0] === x && pos[1] === y) !== -1
+      )
+    },
+    addNumber(value) {
+      // value = parseIn  t(value)
+      const row = this.selectedCell.x
+      const col = this.selectedCell.y
+      console.log(row, col, value)
+      if (this.displayGrid[row][col] === 0) {
+        console.log(value)
+        // this.playerGrid[row][col] = parseInt(value)
+        this.$set(this.playerGrid[row], col, parseInt(value))
+        // this.gridKey++
+        console.log(this.playerGrid[row][col])
+        if (this.completeGrid[row][col] === value) {
+          this.emptyCells--
+        }
+        if (this.checkWin()) {
+          console.log('won: ', this.checkWin())
+        }
+      }
+    },
+    eraseCell() {
+      const row = this.selectedCell.x
+      const col = this.selectedCell.y
+      this.$set(this.playerGrid[row], col, 0)
     },
     calcSubGrids() {
       // calculates all the sub grids and stores position of the cells
@@ -82,13 +212,21 @@ export default {
             if (!this.completeGrid[row].includes(num)) {
               //   console.log('ha')
               // check num not in column
-              if (!this.getGridColumn(this.completeGrid, col).includes(num)) {
+              if (
+                !this.getValues(
+                  this.completeGrid,
+                  this.getGridColumn(this.completeGrid, col)
+                ).includes(num)
+              ) {
                 // check num not in current sub grid
 
                 if (
-                  !this.subGridValues(this.completeGrid, row, col).includes(num)
+                  !this.getValues(
+                    this.completeGrid,
+                    this.getSubGrid(row, col)
+                  ).includes(num)
                 ) {
-                  console.log(row, col, num)
+                  // console.log(row, col, num)
                   this.completeGrid[row][col] = num
                   if (this.checkGrid(this.completeGrid)) {
                     return true
@@ -114,8 +252,14 @@ export default {
         if (grid[row][col] === 0) {
           for (let num = 1; num < 10; num++) {
             if (!grid[row].includes(num)) {
-              if (!this.getGridColumn(grid, col).includes(num)) {
-                if (!this.subGridValues(grid, row, col).includes(num)) {
+              if (
+                !this.getValues(grid, this.getGridColumn(grid, col)).includes(
+                  num
+                )
+              ) {
+                if (
+                  !this.getValues(grid, this.getSubGrid(row, col)).includes(num)
+                ) {
                   grid[row][col] = num
                   if (this.checkGrid(grid)) {
                     this.solutions++
@@ -150,7 +294,7 @@ export default {
         this.displayGrid[row][col] = 0
 
         // count number of solution grid has using backtracking in solve function
-        const gridCopy = this.displayGrid.slice()
+        const gridCopy = this.cloneObject(this.displayGrid)
         this.solutions = 0
         this.solve(gridCopy)
 
@@ -162,21 +306,22 @@ export default {
       } while (attempts > 0)
     },
     getGridColumn(grid, col) {
-      // returns all values in a specific column
-      return grid.map((row) => row[col])
+      // returns all positions in a specific column
+      return grid.map((row) => [grid.indexOf(row), col])
     },
-    subGridValues(grid, row, col) {
-      // find subgrid and return all values within that subgrid
+    getSubGrid(row, col) {
       for (const sub in this.subGrids) {
         const subGrid = this.subGrids[sub]
-        for (let i = 0; i < subGrid.length; i++) {
-          const [gridRow, gridCol] = subGrid[i]
+        for (const pos in subGrid) {
+          const [gridRow, gridCol] = subGrid[pos]
           if (gridRow === row && gridCol === col) {
-            return subGrid.map((pos) => grid[pos[0]][pos[1]])
+            return subGrid
           }
         }
       }
-      return []
+    },
+    getValues(grid, positions) {
+      return positions.map((pos) => grid[pos[0]][pos[1]])
     },
     shuffleList(a) {
       for (let i = a.length - 1; i > 0; i--) {
@@ -187,6 +332,9 @@ export default {
     },
     rng(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min
+    },
+    cloneObject(obj) {
+      return JSON.parse(JSON.stringify(obj))
     },
   },
 }
