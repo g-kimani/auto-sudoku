@@ -19,10 +19,11 @@ export default {
   components: { GridDisplay, GridCell },
   data() {
     return {
-      completeGrid: new Array(9).fill(0).map(() => new Array(9).fill(0)),
+      solvedGrid: new Array(9).fill(0).map(() => new Array(9).fill(0)),
       playerGrid: new Array(9).fill(0).map(() => new Array(9).fill(0)),
-      displayGrid: [],
+      // 3 * 3 grid for each cell
       notesGrid: new Array(27).fill(0).map(() => new Array(27).fill(0)),
+      displayGrid: [],
       subGrids: {},
       showWarnings: false,
       solutions: 0,
@@ -41,8 +42,6 @@ export default {
         let y = -1
         return row.map((cell) => {
           y++
-          // console.log(x, y)
-
           if (cell === 0) {
             return this.playerGrid[x][y]
           } else {
@@ -58,15 +57,14 @@ export default {
     },
   },
   created() {
-    this.calcSubGrids()
+    this.divideSubGrids()
     this.fillGrid()
-    this.displayGrid = this.cloneObject(this.completeGrid)
+    this.displayGrid = this.cloneObject(this.solvedGrid)
     this.removeCells(1)
   },
   mounted() {
     window.addEventListener('keydown', (e) => {
       // registers only key downs for 1 - 9 on either numberpad or keyboard
-      // console.log(e)
       // eslint-disable-next-line eqeqeq
       if ([...Array(9).keys()].findIndex((k) => k + 1 == e.key) !== -1) {
         if (this.selectedCell) {
@@ -87,7 +85,7 @@ export default {
       console.log(x, y, value)
     },
     checkWin() {
-      return this.completeGrid.every((row, x) =>
+      return this.solvedGrid.every((row, x) =>
         row.every((cell, y) => {
           console.log(x, y, cell)
           return (
@@ -98,7 +96,6 @@ export default {
     },
     selectCell(x, y) {
       this.selectedCell = { x, y }
-      // this.displayGrid[this.selectedCell.x][this.selectedCell.y].shaded = true
       this.shadeCells()
     },
     shadeCells() {
@@ -107,10 +104,10 @@ export default {
       const x = this.selectedCell.x
       const y = this.selectedCell.y
       this.shadedCells.push(this.selectedCell)
-      for (let offY = 0; offY < this.completeGrid.length; offY++) {
+      for (let offY = 0; offY < this.solvedGrid.length; offY++) {
         this.shadedCells.push([x, offY])
       }
-      this.getGridColumn(this.completeGrid, y).forEach((pos) =>
+      this.getGridColumn(this.solvedGrid, y).forEach((pos) =>
         this.shadedCells.push(pos)
       )
       this.getSubGrid(x, y).forEach((pos) => {
@@ -122,8 +119,8 @@ export default {
         cellValue = this.playerGrid[x][y]
       }
 
-      for (let row = 0; row < this.completeGrid.length; row++) {
-        for (let col = 0; col < this.completeGrid[row].length; col++) {
+      for (let row = 0; row < this.solvedGrid.length; row++) {
+        for (let col = 0; col < this.solvedGrid[row].length; col++) {
           if (row !== x && col !== y) {
             if (
               (this.displayGrid[row][col] === cellValue ||
@@ -142,17 +139,14 @@ export default {
       )
     },
     addNumber(value) {
-      // value = parseIn  t(value)
       const row = this.selectedCell.x
       const col = this.selectedCell.y
       console.log(row, col, value)
       if (this.displayGrid[row][col] === 0) {
         console.log(value)
-        // this.playerGrid[row][col] = parseInt(value)
         this.$set(this.playerGrid[row], col, parseInt(value))
-        // this.gridKey++
         console.log(this.playerGrid[row][col])
-        if (this.completeGrid[row][col] === value) {
+        if (this.solvedGrid[row][col] === value) {
           this.emptyCells--
         }
         if (this.checkWin()) {
@@ -165,29 +159,31 @@ export default {
       const col = this.selectedCell.y
       this.$set(this.playerGrid[row], col, 0)
     },
-    calcSubGrids() {
-      // calculates all the sub grids and stores position of the cells
+    divideSubGrids() {
+      // divides 9*9 grid into 3*3 sub grids and stores their positions
 
       let row = 1 // start at 1 to be in middle of sub grid
       let col = 1
 
-      let sub = 1
+      let subGrid = 1
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
-          this.subGrids[sub] = []
+          // initialise array to store positions
+          this.subGrids[subGrid] = []
+          // loop over all adjacent cells starting a center of sub grid and store
           for (let x = -1; x < 2; x++) {
             for (let y = -1; y < 2; y++) {
-              this.subGrids[sub].push([row + x, col + y])
+              this.subGrids[subGrid].push([row + x, col + y])
             }
           }
-          sub++ // move to next sub grid
+          subGrid++ // move to next sub grid
           col += 3 // move to middle of next sub grid in the row
         }
         row += 3 // move to middle of next sub grid in column, starting a new row
         col = 1 // reset col to middle of first subgrid in new row
       }
     },
-    checkGrid(grid) {
+    gridFilled(grid) {
       for (let x = 0; x < grid.length; x++) {
         for (let y = 0; y < grid[x].length; y++) {
           if (grid[x][y] === 0) return false
@@ -198,37 +194,31 @@ export default {
     fillGrid() {
       let row, col
       let numList = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-      //   console.log('fillinf')
       for (let i = 0; i < 81; i++) {
         row = Math.floor(i / 9)
         col = i % 9
-        // console.log(row, col)
-        if (this.completeGrid[row][col] === 0) {
+        if (this.solvedGrid[row][col] === 0) {
           numList = this.shuffleList(numList)
           for (const i in numList) {
             const num = numList[i]
-            // console.log(num)
             // check num not already in row
-            if (!this.completeGrid[row].includes(num)) {
-              //   console.log('ha')
+            if (!this.solvedGrid[row].includes(num)) {
               // check num not in column
               if (
                 !this.getValues(
-                  this.completeGrid,
-                  this.getGridColumn(this.completeGrid, col)
+                  this.solvedGrid,
+                  this.getGridColumn(this.solvedGrid, col)
                 ).includes(num)
               ) {
                 // check num not in current sub grid
-
                 if (
                   !this.getValues(
-                    this.completeGrid,
+                    this.solvedGrid,
                     this.getSubGrid(row, col)
                   ).includes(num)
                 ) {
-                  // console.log(row, col, num)
-                  this.completeGrid[row][col] = num
-                  if (this.checkGrid(this.completeGrid)) {
+                  this.$set(this.solvedGrid[row], col, num)
+                  if (this.gridFilled(this.solvedGrid)) {
                     return true
                   } else if (this.fillGrid()) {
                     return true
@@ -241,7 +231,7 @@ export default {
           break
         }
       }
-      this.completeGrid[row][col] = 0
+      this.$set(this.solvedGrid[row], col, 0)
     },
     solve(grid) {
       let row, col
@@ -261,7 +251,7 @@ export default {
                   !this.getValues(grid, this.getSubGrid(row, col)).includes(num)
                 ) {
                   grid[row][col] = num
-                  if (this.checkGrid(grid)) {
+                  if (this.gridFilled(grid)) {
                     this.solutions++
                     break
                   } else if (this.solve(grid)) {
@@ -291,7 +281,7 @@ export default {
 
         // backup cell value in case it needs to be put back
         const backup = this.displayGrid[row][col]
-        this.displayGrid[row][col] = 0
+        this.$set(this.displayGrid[row], col, 0)
 
         // count number of solution grid has using backtracking in solve function
         const gridCopy = this.cloneObject(this.displayGrid)
@@ -300,7 +290,7 @@ export default {
 
         // if the solution is not one put the value back in grid
         if (this.solutions !== 1) {
-          this.displayGrid[row][col] = backup
+          this.$set(this.displayGrid[row], col, backup)
           attempts--
         }
       } while (attempts > 0)
